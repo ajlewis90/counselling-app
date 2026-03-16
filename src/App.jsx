@@ -36,6 +36,7 @@ const DAYS_SHORT=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 function genSlots(){const s=[];for(let h=9;h<16;h++){s.push(`${String(h).padStart(2,"0")}:00`);s.push(`${String(h).padStart(2,"0")}:30`);}return s;}
 const TIME_SLOTS=genSlots();
 const REASONS=["Academic stress or pressure","Anxiety or mental health","Personal / family issues","Adjusting to college life","Financial stress","Relationship difficulties","Grief or loss","Other"];
+const CAMPUSES=["City Road","HANZ"];
 function daysInMonth(y,m){return new Date(y,m+1,0).getDate();}
 function firstDay(y,m){return new Date(y,m,1).getDay();}
 function isWeekday(y,m,d){const wd=new Date(y,m,d).getDay();return wd>0&&wd<6;}
@@ -45,30 +46,31 @@ function formatDate(y,m,d){return `${DAYS_SHORT[new Date(y,m,d).getDay()]} ${d} 
 const G="linear-gradient(135deg,#2D6A4F,#52B788)";
 const gc={fontFamily:"'DM Sans',sans-serif"};
 
+
+ 
 // ── SEND EMAILS via EmailJS ───────────────────────────────────────────────────
 async function sendEmails(booking) {
   const { counsellor, details } = booking;
   const params = {
     to_email:       counsellor.email,
-    cc_email:       CC_EMAIL,
     reply_to:       details.email,
     counsellor:     counsellor.name,
     student_name:   details.name,
     student_id:     details.studentId,
+    campus:         details.campus,    
     student_email:  details.email,
     student_phone:  details.phone,
     reason:         details.reason,
     notes:          details.notes || "None provided",
   };
-  // Email 1: notify counsellor (+ CC arthur)
+  // Email 1: notify counsellor
   await emailjs.send(EJSVC, EJSTPL_STAFF, params, EJSPK);
-  // Email 2: confirmation to student
-  await emailjs.send(EJSVC, EJSTPL_STUDENT, {
-    ...params,
-    student_email: details.email,
-  }, EJSPK);
+  // Email 2: CC copy to arthur.lewis420@gmail.com
+  await emailjs.send(EJSVC, EJSTPL_STAFF, { ...params, to_email: CC_EMAIL }, EJSPK);
+  // Email 3: confirmation to student
+  await emailjs.send(EJSVC, EJSTPL_STUDENT, { ...params, to_email: details.email }, EJSPK);
 }
-
+ 
 // ── SHARED COMPONENTS ─────────────────────────────────────────────────────────
 function Btn({onClick,disabled,children,style={},secondary=false}){
   return(
@@ -84,7 +86,7 @@ function Btn({onClick,disabled,children,style={},secondary=false}){
     </button>
   );
 }
-
+ 
 function Progress({step,total}){
   return(
     <div style={{display:"flex",gap:6,marginBottom:28}}>
@@ -94,7 +96,7 @@ function Progress({step,total}){
     </div>
   );
 }
-
+ 
 function Avatar({initials,color,size=60}){
   return(
     <div style={{width:size,height:size,borderRadius:"50%",background:color,display:"flex",alignItems:"center",
@@ -104,9 +106,9 @@ function Avatar({initials,color,size=60}){
     </div>
   );
 }
-
+ 
 // ── Field component at TOP LEVEL so it never re-mounts on re-render (fixes focus bug) ──
-function Field({label,value,onChange,type="text",placeholder,required=true,as}){
+function Field({label,value,onChange,type="text",placeholder,required=true,as,options,defaultOption}){
   const base={width:"100%",padding:"13px 14px",borderRadius:10,border:"2px solid #E8EFED",...gc,
     fontSize:14,color:"#1B2B2A",outline:"none",background:"#FAFCFB",boxSizing:"border-box",transition:"border-color 0.2s"};
   const onF=e=>e.target.style.borderColor="#2D6A4F";
@@ -123,8 +125,8 @@ function Field({label,value,onChange,type="text",placeholder,required=true,as}){
         <select value={value} onChange={onChange}
           style={{...base,color:value?"#1B2B2A":"#B0C4BC",appearance:"none",cursor:"pointer"}}
           onFocus={onF} onBlur={onB}>
-          <option value="" disabled>Select a reason...</option>
-          {REASONS.map(r=><option key={r} value={r}>{r}</option>)}
+          <option value="" disabled>{defaultOption||"Select an option..."}</option>
+          {(options||REASONS).map(r=><option key={r} value={r}>{r}</option>)}
         </select>
       ):(
         <input type={type} value={value} onChange={onChange} placeholder={placeholder}
@@ -133,7 +135,7 @@ function Field({label,value,onChange,type="text",placeholder,required=true,as}){
     </div>
   );
 }
-
+ 
 // ── TIME Slot at TOP LEVEL ────────────────────────────────────────────────────
 function Slot({slot,selected,onSelect}){
   return(
@@ -147,7 +149,7 @@ function Slot({slot,selected,onSelect}){
     </div>
   );
 }
-
+ 
 // ── WELCOME ───────────────────────────────────────────────────────────────────
 function Welcome({onStart}){
   return(
@@ -176,7 +178,7 @@ function Welcome({onStart}){
     </div>
   );
 }
-
+ 
 // ── COUNSELLOR ────────────────────────────────────────────────────────────────
 function SelectCounsellor({selected,onSelect}){
   return(
@@ -208,7 +210,7 @@ function SelectCounsellor({selected,onSelect}){
     </div>
   );
 }
-
+ 
 // ── DATE ──────────────────────────────────────────────────────────────────────
 function SelectDate({date,setDate}){
   const today=new Date();
@@ -254,7 +256,7 @@ function SelectDate({date,setDate}){
     </div>
   );
 }
-
+ 
 // ── TIME ──────────────────────────────────────────────────────────────────────
 function SelectTime({time,setTime}){
   const morning=TIME_SLOTS.slice(0,6);
@@ -275,7 +277,7 @@ function SelectTime({time,setTime}){
     </div>
   );
 }
-
+ 
 // ── STUDENT DETAILS ───────────────────────────────────────────────────────────
 function StudentDetails({details,setDetails}){
   const upd=(k,v)=>setDetails(d=>({...d,[k]:v}));
@@ -285,14 +287,15 @@ function StudentDetails({details,setDetails}){
       <p style={{...gc,color:"#7A9990",fontSize:14,margin:"0 0 22px"}}>All information is kept strictly confidential 🔒</p>
       <Field label="Full Name" value={details.name||""} onChange={e=>upd("name",e.target.value)} placeholder="e.g. Jane Smith"/>
       <Field label="Student ID" value={details.studentId||""} onChange={e=>upd("studentId",e.target.value)} placeholder="e.g. 12345678"/>
+      <Field label="Campus" as="select" options={CAMPUSES} defaultOption="Select your campus..." value={details.campus||""} onChange={e=>upd("campus",e.target.value)}/>
       <Field label="Email Address" type="email" value={details.email||""} onChange={e=>upd("email",e.target.value)} placeholder="your@email.com"/>
       <Field label="Phone Number" type="tel" value={details.phone||""} onChange={e=>upd("phone",e.target.value)} placeholder="e.g. 021 123 4567"/>
-      <Field label="Reason for Visit" as="select" value={details.reason||""} onChange={e=>upd("reason",e.target.value)} placeholder=""/>
+      <Field label="Reason for Visit" as="select" options={REASONS} defaultOption="Select a reason..." value={details.reason||""} onChange={e=>upd("reason",e.target.value)} placeholder=""/>
       <Field label="Additional Notes" as="textarea" required={false} value={details.notes||""} onChange={e=>upd("notes",e.target.value)} placeholder="Anything else you'd like us to know before your appointment..."/>
     </div>
   );
 }
-
+ 
 // ── REVIEW ────────────────────────────────────────────────────────────────────
 function Review({booking,onSubmit,submitting,error}){
   const{counsellor,details}=booking;
@@ -313,6 +316,7 @@ function Review({booking,onSubmit,submitting,error}){
         <Sec title="Student"/>
         <Row label="Name" value={details.name}/>
         <Row label="Student ID" value={details.studentId}/>
+        <Row label="Campus" value={details.campus}/>
         <Row label="Email" value={details.email}/>
         <Row label="Phone" value={details.phone}/>
         <Row label="Reason" value={details.reason}/>
@@ -328,7 +332,7 @@ function Review({booking,onSubmit,submitting,error}){
     </div>
   );
 }
-
+ 
 // ── SUCCESS ───────────────────────────────────────────────────────────────────
 function Success({booking,onReset}){
   const{counsellor,details}=booking;
@@ -364,7 +368,7 @@ function Success({booking,onReset}){
     </div>
   );
 }
-
+ 
 // ── APP ───────────────────────────────────────────────────────────────────────
 export default function App(){
   const[step,setStep]=useState(0);
@@ -373,11 +377,11 @@ export default function App(){
   const[submitting,setSubmitting]=useState(false);
   const[submitted,setSubmitted]=useState(false);
   const[error,setError]=useState(null);
-
+ 
   const TOTAL=3;
   const canNext=[true,!!counsellor,
-    !!(details.name&&details.studentId&&details.email&&details.phone&&details.reason),true];
-
+    !!(details.name&&details.studentId&&details.email&&details.phone&&details.campus&&details.reason),true];
+ 
   const handleSubmit=async()=>{
     setSubmitting(true);
     setError(null);
@@ -392,10 +396,10 @@ export default function App(){
     setSubmitting(false);
     setSubmitted(true);
   };
-
+ 
   const reset=()=>{setStep(0);setCounsellor(null);setDetails({});setSubmitted(false);setError(null);};
   const booking={counsellor,details};
-
+ 
   return(
     <>
       <style>{`
@@ -405,7 +409,7 @@ export default function App(){
         input::placeholder,textarea::placeholder{color:#B8CEC9;}
         select option{color:#1B2B2A;}
       `}</style>
-      
+ 
       <div style={{minHeight:"100vh",background:"linear-gradient(150deg,#E4F2EB 0%,#F5F0EA 55%,#EAF0F5 100%)",
         display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"28px 16px 60px"}}>
         <div style={{width:"100%",maxWidth:480,background:"rgba(255,255,255,0.95)",borderRadius:26,
